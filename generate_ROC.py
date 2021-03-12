@@ -2,6 +2,8 @@ import argparse
 import os
 import torch
 import torch.backends.cudnn as cudnn
+
+from network.TorchUtils import TorchModel
 from network.anomaly_detector_model import AnomalyDetector
 from features_loader import FeaturesLoaderVal
 from tqdm import tqdm
@@ -14,11 +16,11 @@ import pytorch_wrapper as pw
 
 def get_args():
     parser = argparse.ArgumentParser(description="PyTorch Video Classification Parser")
-    parser.add_argument('--features_path', default='../anomaly_features',
+    parser.add_argument('--features_path', required=True,
                         help="path to features")
-    parser.add_argument('--annotation_path', default="Test_Annotation.txt",
+    parser.add_argument('--annotation_path', required=True,
                         help="path to annotations")
-    parser.add_argument('--model_path', type=str, default="./exps/model.weights",
+    parser.add_argument('--model_path', type=str, required=True,
                         help="set logging file.")
     return parser.parse_args()
 
@@ -37,17 +39,14 @@ if __name__ == "__main__":
                                             num_workers=0,  # 4, # change this part accordingly
                                             pin_memory=True)
 
-    network = AnomalyDetector()
-    system = pw.System(model=network, device=device)
-    system.load_model_state(args.model_path)
-    model = system.model.eval()
+    model = TorchModel.load_model(args.model_path).to(device).eval()
 
     # enable cudnn tune
     cudnn.benchmark = True
 
     y_trues = torch.tensor([])
     y_preds = torch.tensor([])
-
+    print("Calculating scores...")
     with torch.no_grad():
         for features, start_end_couples, lengths in tqdm(data_iter):
             # features is a batch where each item is a tensor of 32 4096D features
@@ -89,3 +88,4 @@ if __name__ == "__main__":
 
     os.makedirs('graphs', exist_ok=True)
     plt.savefig(path.join('graphs', 'roc_auc.png'))
+    print('ROC curve (area = %0.2f)' % roc_auc)
